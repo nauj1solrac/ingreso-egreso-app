@@ -16,6 +16,11 @@ export class AuthService {
   private dbPath = '/usuario';
   usersRef: AngularFirestoreCollection<Usuario>;
   userSubscription!: Subscription;
+  private _user!: Usuario | null;
+
+  get user(){
+    return this._user;
+  }
 
   constructor(
     private auth: AngularFireAuth,
@@ -28,20 +33,17 @@ export class AuthService {
 
   initAuthListener(){
     this.auth.authState.subscribe(fuser => {
-      // console.log(fuser?.uid)
-      // console.log(fuser)
-      // console.log(fuser?.email)
-
       if(fuser){
         // existe
-        // this.db.collection('usuario', ref => ref.where('uid', '==', fuser.uid)).valueChanges()
-        this.userSubscription = this.db.collection(this.dbPath, ref => ref.where('uid', '==', fuser.uid)).valueChanges({ fields: ['nombre', 'email', 'uid'] })
+        this.userSubscription = this.db.doc(`${fuser.uid}/usuario`).valueChanges()
         .subscribe((firestoreUser: any) => {
-          const user = Usuario.fromFirebase(firestoreUser[0]);
+          const user = Usuario.fromFirebase(firestoreUser);
+          this._user = user;
           this.store.dispatch(authActions.setUser({user}));
         })
       }else{
         // no existe
+        this._user = null;
         this.userSubscription.unsubscribe();
         this.store.dispatch(authActions.unSetUser());
       }
@@ -52,8 +54,8 @@ export class AuthService {
     console.log({nombre, email, password})
     return this.auth.createUserWithEmailAndPassword(email, password)
     .then(({user}) =>{
-      const newUser = new Usuario(user?.uid, nombre, user?.email!)
-      return this.usersRef.add({...newUser});
+      const newUser = new Usuario(user!.uid, nombre, user?.email!)
+      return this.db.doc(`${user?.uid}/usuario`).set({...newUser})
     })
   }
 
